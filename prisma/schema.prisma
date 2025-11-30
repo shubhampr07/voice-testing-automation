@@ -1,0 +1,171 @@
+// This is your Prisma schema file
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Testing Session - represents one complete testing cycle
+model TestingSession {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sessionType   SessionType @default(TEXT) // TEXT or VOICE
+  numPersonas   Int
+  initialScript String      @db.Text
+  finalScript   String?     @db.Text
+
+  initialScore     Float?
+  finalScore       Float?
+  improvement      Float?
+  thresholdReached Boolean @default(false)
+  totalIterations  Int     @default(0)
+
+  // Relations
+  personas   Persona[]
+  iterations Iteration[]
+
+  @@index([createdAt])
+  @@index([sessionType])
+}
+
+enum SessionType {
+  TEXT
+  VOICE
+}
+
+// Persona - represents a generated customer personality
+model Persona {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  sessionId String
+  session   TestingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  name                String
+  age                 Int
+  occupation          String
+  personaType         String
+  financialSituation  String   @db.Text
+  personalityTraits   String[] // Array of traits
+  communicationStyle  String
+  reasonForDefault    String   @db.Text
+  attitudeTowardsDebt String
+  likelyResponses     String[] // Array of responses
+  negotiationApproach String
+  painPoints          String[] // Array of pain points
+  triggers            String[] // Array of triggers
+  preferredOutcome    String
+
+  // Relations
+  conversations Conversation[]
+
+  @@index([sessionId])
+  @@index([personaType])
+}
+
+// Iteration - represents one improvement cycle
+model Iteration {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  sessionId String
+  session   TestingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  iterationNumber Int
+  botScript       String @db.Text
+  averageScore    Float
+
+  // Metric averages for this iteration
+  avgNegotiation Float
+  avgRelevance   Float
+
+  // Relations
+  conversations Conversation[]
+
+  @@unique([sessionId, iterationNumber])
+  @@index([sessionId])
+}
+
+// Conversation - represents one bot-persona conversation
+model Conversation {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  sessionId   String
+  iterationId String
+  iteration   Iteration @relation(fields: [iterationId], references: [id], onDelete: Cascade)
+
+  personaId String
+  persona   Persona @relation(fields: [personaId], references: [id], onDelete: Cascade)
+
+  // Conversation metadata
+  turnCount            Int
+  botMessageCount      Int
+  customerMessageCount Int
+
+  // Metrics for this conversation
+  overallScore     Float
+  negotiationScore Float
+  relevanceScore   Float
+
+  // AI-generated insights
+  improvementSuggestions String[] // Array of suggestions
+
+  // Relations
+  messages Message[]
+
+  @@index([sessionId])
+  @@index([iterationId])
+  @@index([personaId])
+}
+
+// Message - individual conversation turn
+model Message {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  turnNumber Int
+  speaker    Speaker
+  content    String  @db.Text
+
+  // Voice-specific fields (optional)
+  audioUrl String?
+  voiceId  String?
+  duration Float? // in seconds
+
+  @@index([conversationId])
+  @@index([turnNumber])
+}
+
+enum Speaker {
+  BOT
+  CUSTOMER
+}
+
+// Analytics aggregation for quick queries
+model DailyAnalytics {
+  id   String   @id @default(cuid())
+  date DateTime @unique @default(now())
+
+  totalSessions Int @default(0)
+  textSessions  Int @default(0)
+  voiceSessions Int @default(0)
+
+  avgInitialScore Float?
+  avgFinalScore   Float?
+  avgImprovement  Float?
+
+  totalConversations Int @default(0)
+  totalMessages      Int @default(0)
+
+  @@index([date])
+}
